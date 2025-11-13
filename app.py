@@ -5,7 +5,7 @@ import streamlit as st
 # ---------------------------------------------------------
 st.set_page_config(
     page_title="AI Materiality & PCAP Prototype",
-    page_icon="🌱",
+    page_icon="https://thedataleaf.com/wp-content/uploads/2025/09/Untitled-design-10-1.png",
     layout="centered",
 )
 
