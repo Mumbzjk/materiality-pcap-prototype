@@ -1,7 +1,7 @@
 import streamlit as st
 
 # ---------------------------------------------------------
-# PAGE CONFIGURATION
+# PAGE CONFIG
 # ---------------------------------------------------------
 st.set_page_config(
     page_title="AI Materiality & PCAP Prototype",
@@ -10,26 +10,26 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# LOGO AT TOP
+# LOGO HEADER
 # ---------------------------------------------------------
 LOGO_URL = "https://thedataleaf.com/wp-content/uploads/2025/09/Untitled-design-10-1.png"
 
-# Center the logo
 col_logo = st.columns([1, 2, 1])
 with col_logo[1]:
     st.image(LOGO_URL, width=200)
 
 st.title("AI Materiality & PCAP Scoring Prototype")
+
 st.write(
-    "This prototype demonstrates how company profile data,sector, geography, and size"
-    "can be used to infer material ESG/climate topics, emission scopes, and a PCAP-style "
-    "risk score. It also auto-generates a narrative to support materiality assessments."
+    "This prototype demonstrates how basic company profile data (sector, geography, size) "
+    "can infer likely material ESG/climate topics, emission scopes, and a **PCAP-style 1–5 exposure score**. "
+    "It also generates a short narrative to support early-stage materiality assessments. "
 )
 
 st.markdown("---")
 
 # ---------------------------------------------------------
-# 1. INPUT SECTION — COMPANY PROFILE
+# 1. INPUT SECTION
 # ---------------------------------------------------------
 st.header("1. Company Profile")
 
@@ -57,13 +57,13 @@ with col2:
 company_size = st.selectbox(
     "Company Size",
     ["Small", "Medium", "Large"],
-    help="Approximate scale based on revenue, assets or headcount.",
+    help="Size is a proxy for scale, asset intensity, and governance expectations.",
 )
 
 st.markdown("---")
 
 # ---------------------------------------------------------
-# 2. LOGIC — INFER MATERIAL SCOPES & TOPICS
+# 2. SCOPES + TOPICS INFERENCE
 # ---------------------------------------------------------
 def infer_scopes_and_topics(sector, geography, company_size):
     scopes = set()
@@ -94,11 +94,12 @@ def infer_scopes_and_topics(sector, geography, company_size):
         scopes.update(["Financed Emissions", "Operational Scope 2"])
         topics.update(["Financed Emissions", "Portfolio Alignment", "Risk Management", "Governance"])
 
+
     # --- Geography modifiers ---
     if geography == "Canada":
         topics.update(["Climate Policy Risk", "Carbon Pricing Exposure"])
     elif geography == "Europe":
-        topics.update(["Regulatory Compliance (EU)", "Supply Chain Due Diligence"])
+        topics.update(["Regulatory Compliance (EU/CSRD)", "Supply Chain Due Diligence"])
     elif geography == "Asia":
         topics.update(["Supply Chain Risk", "Physical Climate Risk"])
     elif geography == "Global":
@@ -110,50 +111,59 @@ def infer_scopes_and_topics(sector, geography, company_size):
     elif company_size == "Medium":
         topics.update(["Growth & Scaling Risk"])
 
+    # --- Framework readiness signals ---
+    topics.update(["ISSB / SASB Alignment Potential"])
+
     return sorted(scopes), sorted(topics)
 
-
 # ---------------------------------------------------------
-# 3. PCAP-STYLE RISK SCORING LOGIC
+# 3. PCAP SCORING (1–5 MODEL)
 # ---------------------------------------------------------
 def compute_pcap_score(sector, geography, company_size):
-    sector_risk = {
-        "Manufacturing": 8,
-        "Software": 4,
-        "Retail": 6,
-        "Transportation": 9,
-        "Energy": 10,
-        "Financial Services": 7,
+
+    # Base sector risk (1–5 anchor)
+    sector_weight = {
+        "Manufacturing": 4,
+        "Software": 2,
+        "Retail": 3,
+        "Transportation": 4,
+        "Energy": 5,
+        "Financial Services": 3,
     }
 
-    geography_risk = {
-        "Canada": 4,
-        "United States": 3,
-        "Europe": 4,
-        "Asia": 3,
-        "Global": 5,
+    # Geography modifiers (0–1 additive)
+    geography_weight = {
+        "Canada": 1,
+        "United States": 0.5,
+        "Europe": 1,
+        "Asia": 0.5,
+        "Global": 1.5,
     }
 
-    size_multiplier = {
-        "Small": 0.8,
+    # Size multiplier (smallest → largest)
+    size_mult = {
+        "Small": 0.9,
         "Medium": 1.0,
         "Large": 1.2,
     }
 
-    base_score = sector_risk[sector] + geography_risk[geography]
-    scaled_score = base_score * size_multiplier[company_size]
+    # Raw score logic:
+    raw_score = (sector_weight[sector] + geography_weight[geography]) * size_mult[company_size]
 
-    final_score = int(min(scaled_score * 5, 100))
+    # Normalize to 1–5
+    final = min(max(round(raw_score), 1), 5)
 
-    if final_score < 35:
-        band = "Low"
-    elif final_score < 70:
-        band = "Medium"
-    else:
-        band = "High"
+    # Band naming
+    band_map = {
+        1: "Low",
+        2: "Low–Medium",
+        3: "Medium",
+        4: "Medium–High",
+        5: "High",
+    }
 
-    return final_score, band
-
+    band = band_map[final]
+    return final, band
 
 # ---------------------------------------------------------
 # 4. RUN ANALYSIS
@@ -161,23 +171,20 @@ def compute_pcap_score(sector, geography, company_size):
 if st.button("Generate Materiality Profile"):
 
     scopes, topics = infer_scopes_and_topics(sector, geography, company_size)
-    score, score_band = compute_pcap_score(sector, geography, company_size)
+    score_5, band = compute_pcap_score(sector, geography, company_size)
 
-    # --- Score Display ---
-    st.header("2. PCAP-style Risk Scoring")
+    # --- PCAP Score Display ---
+    st.header("2. PCAP Exposure Score (1–5)")
 
-    col_score, col_band = st.columns([2, 1])
+    col_left, col_right = st.columns([2, 1])
+    with col_left:
+        st.metric("PCAP Score", f"{score_5} / 5")
+    with col_right:
+        st.subheader("Exposure Level")
+        st.markdown(f"### {band}")
 
-    with col_score:
-        st.metric("PCAP Risk Score", f"{score} / 100")
-        st.progress(score)
-
-    with col_band:
-        st.subheader("Risk Band")
-        st.markdown(f"### {score_band}")
-
-    # --- Material Outputs ---
-    st.header("3. Predicted Material Scopes & ESG Topics")
+    # --- Scopes & Topics ---
+    st.header("3. Predicted Material Emission Scopes & ESG Topics")
 
     st.subheader("Likely Material Emission Scopes")
     st.write(", ".join(scopes))
@@ -189,20 +196,18 @@ if st.button("Generate Materiality Profile"):
     st.header("4. AI-Generated Narrative (Prototype)")
 
     narrative = (
-        f"A {company_size.lower()} {sector.lower()} company in {geography} "
-        f"has a **{score_band.lower()} PCAP-style risk score** of **{score}/100**. "
-        f"Material emission scopes likely include {', '.join(scopes)}. "
-        f"Key ESG and climate topics relevant to this profile include: {', '.join(topics)}. "
-        "This provides a structured starting point for materiality assessment, prioritization, "
-        "and disclosure planning."
+        f"This company — a {company_size.lower()} {sector.lower()} organization operating in {geography} — "
+        f"receives a **PCAP exposure score of {score_5}/5 ({band})**. "
+        f"Based on profile-level indicators, material emission scopes likely include {', '.join(scopes)}. "
+        f"Relevant ESG and climate topics include: {', '.join(topics)}. "
+        "This provides a structured, pre-materiality view before deeper data collection. "
+        "In a full implementation, this logic would draw on sector taxonomies, ISSB/SASB mappings, "
+        "and historical ESGTree assessments to refine scoring and recommendations."
     )
 
     st.write(narrative)
 
-    st.caption(
-        "Prototype only — logic and mappings would be refined with ESGTree taxonomies, "
-        "frameworks, and client datasets in production."
-    )
+    st.caption("Prototype only — logic evolves with ESGTree data, frameworks, and AI models.")
 
 else:
-    st.info("Select company details above, then click **Generate Materiality Profile** to begin.")
+    st.info("Select company details above, then click **Generate Materiality Profile**.")
