@@ -21,7 +21,7 @@ with col_logo[1]:
 
 st.title("AI Materiality & PCAP Scoring Prototype")
 st.write(
-    "This prototype demonstrates how company profile data—sector, geography, and size—"
+    "This prototype demonstrates how company profile data,sector, geography, and size"
     "can be used to infer material ESG/climate topics, emission scopes, and a PCAP-style "
     "risk score. It also auto-generates a narrative to support materiality assessments."
 )
